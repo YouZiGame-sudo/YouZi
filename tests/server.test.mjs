@@ -1,0 +1,9 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {spawn} from 'node:child_process';
+import {once} from 'node:events';
+import {mkdtemp,cp,readFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+test('development server serves app assets and rejects missing paths',async()=>{const child=spawn(process.execPath,['scripts/server.mjs'],{env:{...process.env,PORT:'31983'},stdio:['ignore','pipe','pipe']});try{await Promise.race([once(child.stdout,'data'),once(child,'exit').then(()=>{throw new Error('Server exited before startup');}),new Promise((_,reject)=>setTimeout(()=>reject(new Error('Startup timed out')),3000).unref())]);const root=await fetch('http://127.0.0.1:31983/');assert.equal(root.status,200);assert.match(await root.text(),/YouZi/);for(const path of ['/app.js','/core.js','/style.css','/favicon.svg']){const response=await fetch('http://127.0.0.1:31983'+path);assert.equal(response.status,200);assert.equal(response.headers.get('x-content-type-options'),'nosniff');}assert.equal((await fetch('http://127.0.0.1:31983/missing')).status,404);assert.equal((await fetch('http://127.0.0.1:31983/%2e%2e%2fpackage.json')).status,403);}finally{child.kill();await once(child,'exit');}});
+test('build creates a self-contained static copy',async()=>{const dir=await mkdtemp(join(tmpdir(),'youzi-build-'));try{await cp('public',join(dir,'public'),{recursive:true});await cp('scripts',join(dir,'scripts'),{recursive:true});const child=spawn(process.execPath,['scripts/build.mjs'],{cwd:dir});const [code]=await once(child,'exit');assert.equal(code,0);for(const name of ['index.html','app.js','core.js','style.css','favicon.svg'])assert.deepEqual(await readFile(join(dir,'dist',name)),await readFile(join(dir,'public',name)));}finally{await rm(dir,{recursive:true,force:true});}});

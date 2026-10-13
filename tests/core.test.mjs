@@ -1,0 +1,12 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {palette,nearest,counts,flood,line,resize,fromPixels,validProject,pattern} from '../public/core.js';
+test('flood fill respects connected regions and boundaries',()=>{const cells=[0,1,0,0,1,0,1,1,0];assert.deepEqual(flood(cells,3,0,0,2),[2,1,0,2,1,0,1,1,0]);assert.deepEqual(cells,[0,1,0,0,1,0,1,1,0]);assert.deepEqual(flood(cells,3,0,0,0),cells);});
+test('diagonal cells do not connect when filling',()=>{assert.deepEqual(flood([0,1,1,0],2,0,0,2),[2,1,1,0]);});
+test('counts exclude transparent cells and preserve totals',()=>{assert.deepEqual(counts([-1,2,2,1,-1]),[[2,2],[1,1]]);assert.deepEqual(counts([-1,-1]),[]);});
+test('all exact palette colors map to themselves',()=>{palette.forEach((c,i)=>assert.equal(nearest(...c.hex.match(/\w\w/g).map(v=>parseInt(v,16))),i));});
+test('image conversion keeps transparent pixels empty',()=>{assert.deepEqual(fromPixels(new Uint8ClampedArray([221,166,170,255,0,0,0,0,245,239,223,255,0,0,0,63]),2),[4,-1,0,-1]);});
+test('stroke interpolation fills skipped pointer samples',()=>{assert.deepEqual(line(0,0,3,0),[[0,0],[1,0],[2,0],[3,0]]);assert.deepEqual(line(3,3,0,0),[[3,3],[2,2],[1,1],[0,0]]);assert.deepEqual(line(1,1,1,1),[[1,1]]);});
+test('resizing preserves corners and palette indices',()=>{assert.deepEqual(resize([0,1,2,3],2,4),[0,0,1,1,0,0,1,1,2,2,3,3,2,2,3,3]);assert.deepEqual(resize([0,1,2,3],2,2),[0,1,2,3]);});
+test('templates generate non-empty valid projects at all supported sizes',()=>{for(const size of [16,24,32,48,64])for(const kind of ['flower','heart','cat']){const cells=pattern(kind,size);assert.equal(validProject({version:1,name:kind,size,cells}),true);assert.ok(cells.some(c=>c>=0));}});
+test('import rejects malformed, oversized, unsupported and non-integer data',()=>{const p={version:1,name:'作品',size:8,cells:Array(64).fill(-1)};assert.ok(validProject(p));for(const value of [{...p,version:2},{...p,size:65},{...p,name:''},{...p,name:' '.repeat(2)},{...p,name:'a'.repeat(101)},{...p,cells:[0]},{...p,cells:Array(64).fill(99)},{...p,cells:Array(64).fill(.5)},{...p,cells:Array(64).fill(-2)},null])assert.equal(validProject(value),false);});
